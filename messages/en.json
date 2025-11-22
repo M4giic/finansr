@@ -1,0 +1,12 @@
+{
+  "HomePage": {
+    "title": "Finansr",
+    "subtitle": "Manage your finances locally."
+  },
+  "SorrowLevel": {
+    "HAVE_TO": "Have to",
+    "WANTED_TO": "Wanted to",
+    "NOT_NEEDED": "Not needed",
+    "REGRET": "Regret"
+  }
+}

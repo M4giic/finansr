@@ -1,0 +1,12 @@
+{
+    "HomePage": {
+        "title": "Finansr",
+        "subtitle": "Zarządzaj finansami lokalnie."
+    },
+    "SorrowLevel": {
+        "HAVE_TO": "Muszę",
+        "WANTED_TO": "Chcę",
+        "NOT_NEEDED": "Nie potrzebuję",
+        "REGRET": "Żałuję"
+    }
+}
