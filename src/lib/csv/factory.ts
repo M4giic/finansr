@@ -1,11 +1,13 @@
 import { CsvParser } from "./types";
 import { MbankCsvParser } from "./mbank";
 import { CitiCsvParser } from "./citi";
+import { CitiNewCsvParser } from "./citi-new";
 
 export class CsvParserFactory {
     private parsers: CsvParser[] = [
         new MbankCsvParser(),
         new CitiCsvParser(),
+        new CitiNewCsvParser(),
     ];
 
     getParser(content: string): CsvParser {

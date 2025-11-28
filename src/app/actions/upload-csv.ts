@@ -1,8 +1,6 @@
 'use server';
 
 import { CsvParserFactory } from "@/lib/csv/factory";
-import db from "@/lib/db";
-import { revalidatePath } from "next/cache";
 
 export async function uploadCsv(formData: FormData) {
     const file = formData.get('file') as File;
@@ -17,22 +15,11 @@ export async function uploadCsv(formData: FormData) {
         const parser = factory.getParser(content);
         const transactions = await parser.parse(content);
 
-        // Import all transactions - user can delete duplicates manually
-        for (const tx of transactions) {
-            await db.transaction.create({
-                data: {
-                    date: new Date(tx.date),
-                    amount: tx.amount,
-                    currency: tx.currency,
-                    originalDescription: tx.description,
-                    bankAccount: tx.bankAccount,
-                    externalId: tx.externalId || crypto.randomUUID(),
-                }
-            });
-        }
-
-        revalidatePath('/');
-        return { success: true, message: `Imported ${transactions.length} transactions successfully!` };
+        return {
+            success: true,
+            transactions: transactions,
+            bankName: parser.name
+        };
 
     } catch (error) {
         console.error("CSV Parse Error:", error);

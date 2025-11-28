@@ -1,12 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Transaction, Category } from "@prisma/client";
+import { Transaction, Category, Account } from "@prisma/client";
 import { useTranslations } from "next-intl";
 import { CategoryPicker } from "./category-picker";
 import { WantedSelector } from "./wanted-selector";
 import { updateTransactionCategory } from "@/app/actions/transactions";
 import { updateTransactionDescription } from "@/app/actions/update-description";
+import { updateTransactionAccount } from "@/app/actions/update-account";
+import { updateTransactionBank } from "@/app/actions/update-bank";
+import { updateTransactionSubcategory } from "@/app/actions/update-subcategory";
 import { deleteTransaction } from "@/app/actions/delete-transaction";
 import { Input } from "./ui/input";
 import { Check, X, Trash2 } from "lucide-react";
@@ -81,95 +84,152 @@ function EditableDescription({ transactionId, userDescription, originalDescripti
     );
 }
 
+type TransactionWithAccount = Transaction & { account?: Account | null };
+
 interface TransactionListProps {
-    initialTransactions: Transaction[];
+    initialTransactions: TransactionWithAccount[];
     categories: Category[];
+    accounts: Account[];
 }
 
-export function TransactionList({ initialTransactions, categories: initialCategories }: TransactionListProps) {
+export function TransactionList({ initialTransactions, categories: initialCategories, accounts }: TransactionListProps) {
     const t = useTranslations('HomePage');
     const [transactions, setTransactions] = useState(initialTransactions);
     const [categories, setCategories] = useState(initialCategories);
 
     const handleCategorySelect = async (transactionId: string, categoryId: string) => {
-        // Optimistic update
+        await updateTransactionCategory(transactionId, categoryId);
+        // Clear subcategory when category changes
+        await updateTransactionSubcategory(transactionId, null);
+        setTransactions(transactions.map(tx =>
+            tx.id === transactionId ? { ...tx, categoryId, subcategoryId: null } : tx
+        ));
+    };
+
+    const handleSubcategorySelect = async (transactionId: string, subcategoryId: string | null) => {
+        await updateTransactionSubcategory(transactionId, subcategoryId);
+        setTransactions(transactions.map(tx =>
+            tx.id === transactionId ? { ...tx, subcategoryId } : tx
+        ));
+    };
+
+    const handleAccountSelect = async (transactionId: string, accountId: string) => {
         setTransactions(prev => prev.map(tx =>
-            tx.id === transactionId ? { ...tx, categoryId } : tx
+            tx.id === transactionId ? { ...tx, accountId, categoryId: null, subcategoryId: null } : tx
         ));
 
-        await updateTransactionCategory(transactionId, categoryId);
+        await updateTransactionAccount(transactionId, accountId);
+        await updateTransactionCategory(transactionId, "");
+        await updateTransactionSubcategory(transactionId, null);
+    };
+
+    const handleBankSelect = async (transactionId: string, bankName: string) => {
+        setTransactions(prev => prev.map(tx =>
+            tx.id === transactionId ? { ...tx, bankAccount: bankName } : tx
+        ));
+
+        await updateTransactionBank(transactionId, bankName);
     };
 
     const handleCategoryCreated = (newCategory: Category) => {
-        // Add new category to the list so it's available for all pickers
         setCategories(prev => [...prev, newCategory]);
     };
 
     const handleDelete = async (transactionId: string) => {
         if (!confirm('Are you sure you want to delete this transaction?')) return;
 
-        // Optimistic update
         setTransactions(prev => prev.filter(tx => tx.id !== transactionId));
         await deleteTransaction(transactionId);
     };
 
     return (
-        <div className="border rounded-lg overflow-hidden">
+        <div className="border rounded-lg overflow-x-auto">
             <table className="w-full text-left text-sm">
                 <thead className="bg-gray-100 dark:bg-gray-800">
                     <tr>
                         <th className="p-3">Date</th>
                         <th className="p-3">Description</th>
                         <th className="p-3 text-right">Amount</th>
-                        <th className="p-3">Bank</th>
                         <th className="p-3">Category</th>
                         <th className="p-3">I Wanted It</th>
+                        <th className="p-3">Account</th>
+                        <th className="p-3">Bank</th>
                         <th className="p-3">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {transactions.map((tx) => (
-                        <tr key={tx.id} className="border-t hover:bg-gray-50 dark:hover:bg-gray-900">
-                            <td className="p-3">{new Date(tx.date).toLocaleDateString()}</td>
-                            <td className="p-3">
-                                <EditableDescription
-                                    transactionId={tx.id}
-                                    userDescription={tx.userDescription}
-                                    originalDescription={tx.originalDescription}
-                                />
-                            </td>
-                            <td className={`p-3 text-right ${tx.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                {(tx.amount / 100).toFixed(2)} {tx.currency}
-                            </td>
-                            <td className="p-3">{tx.bankAccount}</td>
-                            <td className="p-3">
-                                <CategoryPicker
-                                    categoryId={tx.categoryId}
-                                    categories={categories}
-                                    onSelect={(catId) => handleCategorySelect(tx.id, catId)}
-                                    onCategoryCreated={handleCategoryCreated}
-                                />
-                            </td>
-                            <td className="p-3">
-                                <WantedSelector
-                                    transactionId={tx.id}
-                                    wantedLevel={tx.wantedLevel}
-                                />
-                            </td>
-                            <td className="p-3">
-                                <button
-                                    onClick={() => handleDelete(tx.id)}
-                                    className="p-1 hover:bg-red-50 rounded text-red-600 hover:text-red-700"
-                                    title="Delete transaction"
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
-                            </td>
-                        </tr>
-                    ))}
+                    {transactions.map((tx) => {
+                        const availableCategories = categories.filter(c =>
+                            !c.accountId || c.accountId === tx.accountId
+                        );
+
+                        return (
+                            <tr key={tx.id} className="border-t hover:bg-gray-50 dark:hover:bg-gray-900">
+                                <td className="p-3">{new Date(tx.date).toLocaleDateString()}</td>
+                                <td className="p-3">
+                                    <EditableDescription
+                                        transactionId={tx.id}
+                                        userDescription={tx.userDescription}
+                                        originalDescription={tx.originalDescription}
+                                    />
+                                </td>
+                                <td className={`p-3 text-right ${tx.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                    {(tx.amount / 100).toFixed(2)} {tx.currency}
+                                </td>
+                                <td className="p-3">
+                                    <CategoryPicker
+                                        categoryId={tx.categoryId}
+                                        subcategoryId={tx.subcategoryId}
+                                        categories={availableCategories}
+                                        onCategorySelect={(catId) => handleCategorySelect(tx.id, catId)}
+                                        onSubcategorySelect={(subId) => handleSubcategorySelect(tx.id, subId)}
+                                        onCategoryCreated={handleCategoryCreated}
+                                    />
+                                </td>
+                                <td className="p-3">
+                                    <WantedSelector
+                                        transactionId={tx.id}
+                                        wantedLevel={tx.wantedLevel}
+                                    />
+                                </td>
+                                <td className="p-3">
+                                    <select
+                                        className="p-1 border rounded text-xs"
+                                        value={tx.accountId || ""}
+                                        onChange={(e) => handleAccountSelect(tx.id, e.target.value)}
+                                    >
+                                        <option value="" disabled>Select</option>
+                                        {accounts.map(acc => (
+                                            <option key={acc.id} value={acc.id}>{acc.name}</option>
+                                        ))}
+                                    </select>
+                                </td>
+                                <td className="p-3">
+                                    <select
+                                        className="p-1 border rounded text-xs"
+                                        value={tx.bankAccount}
+                                        onChange={(e) => handleBankSelect(tx.id, e.target.value)}
+                                    >
+                                        <option value="MBANK">MBANK</option>
+                                        <option value="CITI">CITI</option>
+                                        <option value="OTHER">OTHER</option>
+                                    </select>
+                                </td>
+                                <td className="p-3">
+                                    <button
+                                        onClick={() => handleDelete(tx.id)}
+                                        className="p-1 hover:bg-red-50 rounded text-red-600 hover:text-red-700"
+                                        title="Delete transaction"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </td>
+                            </tr>
+                        );
+                    })}
                     {transactions.length === 0 && (
                         <tr>
-                            <td colSpan={7} className="p-8 text-center text-gray-500">
+                            <td colSpan={8} className="p-8 text-center text-gray-500">
                                 No transactions found. Upload a CSV to get started.
                             </td>
                         </tr>
