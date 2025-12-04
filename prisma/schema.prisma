@@ -15,6 +15,7 @@ model Account {
   
   transactions Transaction[]
   categories   Category[]
+  importCoverages ImportCoverage[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -43,6 +44,8 @@ model Transaction {
   
   status              String   @default("STAGED") // STAGED, SUBMITTED
   submittedAt         DateTime?
+  
+  syncedToSheets      DateTime? // Track when synced to Google Sheets
   
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -85,4 +88,17 @@ model BankConnection {
   institutionName String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model ImportCoverage {
+  id          String   @id @default(uuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  bankAccount String   // MBANK, CITI, etc.
+  startDate   DateTime
+  endDate     DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([accountId, bankAccount])
 }

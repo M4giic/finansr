@@ -9,9 +9,18 @@ import { AllTransactions } from "@/components/all-transactions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import db from "@/lib/db";
 import { getCategories } from "@/app/actions/categories";
+import { SyncButton } from "@/components/sync-button";
 
 async function getAccounts() {
-    let accounts = await db.account.findMany();
+    let accounts = await db.account.findMany({
+        include: {
+            importCoverages: {
+                orderBy: {
+                    startDate: 'asc'
+                }
+            }
+        }
+    });
     if (accounts.length === 0) {
         // Create default account
         await db.account.create({
@@ -21,7 +30,15 @@ async function getAccounts() {
                 currency: "PLN"
             }
         });
-        accounts = await db.account.findMany();
+        accounts = await db.account.findMany({
+            include: {
+                importCoverages: {
+                    orderBy: {
+                        startDate: 'asc'
+                    }
+                }
+            }
+        });
     }
     return accounts;
 }
@@ -113,8 +130,14 @@ export default async function HomePage() {
                             </div>
                         </TabsContent>
 
+
+
                         {/* Tab 2: Admin */}
                         <TabsContent value="admin" className="space-y-8">
+                            <div className="flex justify-between items-center">
+                                <h2 className="text-2xl font-bold">Configuration</h2>
+                                <SyncButton />
+                            </div>
                             <AccountManager initialAccounts={accounts} />
                             <CategoryManager initialCategories={categoriesWithAccounts} />
                         </TabsContent>

@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { uploadCsv } from '@/app/actions/upload-csv';
 import { stageTransactions } from '@/app/actions/stage-transactions';
+import { checkCoverageForRange, getConflictingTransactions } from '@/app/actions/coverage';
 import { Button } from '@/components/ui/button';
 import { BankTransaction } from '@/lib/banks/types';
-import { format } from 'date-fns';
+import { Checkbox } from '@/components/ui/checkbox';
+import { AlertCircle, Calendar } from 'lucide-react';
 
 interface Account {
     id: string;
@@ -31,7 +33,59 @@ export function ImportWizard({ accounts }: ImportWizardProps) {
     const [startDate, setStartDate] = useState<string>('');
     const [endDate, setEndDate] = useState<string>('');
 
+    // New state for coverage and conflicts
+    const [autoAdjustDates, setAutoAdjustDates] = useState(true);
+    const [hasConflicts, setHasConflicts] = useState(false);
+    const [userConsent, setUserConsent] = useState(false);
+    const [conflictMap, setConflictMap] = useState<Record<string, string[]>>({});
+    const [coverageWarning, setCoverageWarning] = useState('');
+
     const router = useRouter();
+
+    // Check for coverage conflicts when account, bank, or date range changes
+    useEffect(() => {
+        if (selectedAccount && selectedBank && startDate && endDate) {
+            checkCoverage();
+        }
+    }, [selectedAccount, selectedBank, startDate, endDate]);
+
+    // Check for transaction conflicts when moving to CONFIG step
+    useEffect(() => {
+        if (step === 'CONFIG' && selectedAccount && selectedBank && startDate && endDate) {
+            checkConflicts();
+        }
+    }, [step]);
+
+    async function checkCoverage() {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+
+        const result = await checkCoverageForRange(selectedAccount, selectedBank, start, end);
+
+        if (result.success && result.hasConflict) {
+            const periods = result.conflictingPeriods.map(p =>
+                `${new Date(p.startDate).toLocaleDateString()} - ${new Date(p.endDate).toLocaleDateString()}`
+            ).join(', ');
+            setCoverageWarning(`⚠️ This date range overlaps with existing coverage: ${periods}`);
+        } else {
+            setCoverageWarning('');
+        }
+    }
+
+    async function checkConflicts() {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+
+        const result = await getConflictingTransactions(selectedAccount, selectedBank, start, end);
+
+        if (result.success && Object.keys(result.conflictMap).length > 0) {
+            setConflictMap(result.conflictMap);
+            setHasConflicts(true);
+        } else {
+            setConflictMap({});
+            setHasConflicts(false);
+        }
+    }
 
     async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
         const file = event.target.files?.[0];
@@ -49,7 +103,7 @@ export function ImportWizard({ accounts }: ImportWizardProps) {
         if (result.success && result.transactions) {
             setTransactions(result.transactions);
             setBankName(result.bankName || '');
-            setSelectedBank(result.bankName || 'MBANK'); // Default or detected
+            setSelectedBank(result.bankName || 'MBANK');
 
             // Calculate date range
             const dates = result.transactions.map(t => new Date(t.date).getTime());
@@ -58,6 +112,7 @@ export function ImportWizard({ accounts }: ImportWizardProps) {
 
             setStartDate(min.toISOString().split('T')[0]);
             setEndDate(max.toISOString().split('T')[0]);
+            setAutoAdjustDates(true); // Reset auto-adjust
 
             setStep('CONFIG');
         } else {
@@ -65,9 +120,48 @@ export function ImportWizard({ accounts }: ImportWizardProps) {
         }
     }
 
+    function handleDateChange(type: 'start' | 'end', value: string) {
+        if (type === 'start') {
+            setStartDate(value);
+        } else {
+            setEndDate(value);
+        }
+        // Disable auto-adjust when user manually changes dates
+        setAutoAdjustDates(false);
+    }
+
+    // Auto-adjust end date based on filtered transactions
+    useEffect(() => {
+        if (autoAdjustDates && transactions.length > 0 && startDate && endDate) {
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+
+            const filtered = transactions.filter(t => {
+                const d = new Date(t.date);
+                return d >= start && d <= end;
+            });
+
+            if (filtered.length > 0) {
+                const maxDate = new Date(Math.max(...filtered.map(t => new Date(t.date).getTime())));
+                const newEndDate = maxDate.toISOString().split('T')[0];
+
+                // Only update if different to avoid infinite loop
+                if (newEndDate !== endDate) {
+                    setEndDate(newEndDate);
+                }
+            }
+        }
+    }, [transactions, startDate, autoAdjustDates]);
+
     async function handleStage() {
         if (!selectedAccount) {
             setMessage("Please select an account");
+            return;
+        }
+
+        if (hasConflicts && !userConsent) {
+            setMessage("Please consent to importing with potential duplicates");
             return;
         }
 
@@ -76,7 +170,6 @@ export function ImportWizard({ accounts }: ImportWizardProps) {
         // Filter transactions by date
         const start = new Date(startDate);
         const end = new Date(endDate);
-        // Set end date to end of day
         end.setHours(23, 59, 59, 999);
 
         const filtered = transactions.filter(t => {
@@ -84,7 +177,13 @@ export function ImportWizard({ accounts }: ImportWizardProps) {
             return d >= start && d <= end;
         });
 
-        const result = await stageTransactions(filtered, selectedAccount, selectedBank);
+        const result = await stageTransactions(
+            filtered,
+            selectedAccount,
+            selectedBank,
+            start,
+            end
+        );
 
         setUploading(false);
 
@@ -92,6 +191,8 @@ export function ImportWizard({ accounts }: ImportWizardProps) {
             setMessage(`Successfully staged ${result.count} transactions!`);
             setStep('UPLOAD');
             setTransactions([]);
+            setUserConsent(false);
+            setHasConflicts(false);
             router.refresh();
         } else {
             setMessage(`Error: ${result.error}`);
@@ -130,6 +231,15 @@ export function ImportWizard({ accounts }: ImportWizardProps) {
         );
     }
 
+    // Calculate filtered transaction count
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+    const filteredCount = transactions.filter(t => {
+        const d = new Date(t.date);
+        return d >= start && d <= end;
+    }).length;
+
     return (
         <div className="p-4 border rounded-lg shadow-sm bg-white dark:bg-gray-800 space-y-4">
             <h3 className="text-lg font-semibold">Configure Import</h3>
@@ -165,7 +275,7 @@ export function ImportWizard({ accounts }: ImportWizardProps) {
                         type="date"
                         className="w-full p-2 border rounded"
                         value={startDate}
-                        onChange={e => setStartDate(e.target.value)}
+                        onChange={e => handleDateChange('start', e.target.value)}
                     />
                 </div>
 
@@ -175,18 +285,74 @@ export function ImportWizard({ accounts }: ImportWizardProps) {
                         type="date"
                         className="w-full p-2 border rounded"
                         value={endDate}
-                        onChange={e => setEndDate(e.target.value)}
+                        onChange={e => handleDateChange('end', e.target.value)}
                     />
                 </div>
             </div>
 
+            {/* Auto-adjust checkbox */}
+            <div className="flex items-center space-x-2">
+                <Checkbox
+                    id="auto-adjust"
+                    checked={autoAdjustDates}
+                    onCheckedChange={(checked) => setAutoAdjustDates(checked as boolean)}
+                />
+                <label
+                    htmlFor="auto-adjust"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                    Adjust end date automatically based on transactions
+                </label>
+            </div>
+
+            {/* Coverage warning */}
+            {coverageWarning && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-start gap-2">
+                    <Calendar className="w-5 h-5 text-yellow-600 mt-0.5" />
+                    <p className="text-sm text-yellow-800">{coverageWarning}</p>
+                </div>
+            )}
+
+            {/* Conflict warning */}
+            {hasConflicts && (
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 space-y-2">
+                    <div className="flex items-start gap-2">
+                        <AlertCircle className="w-5 h-5 text-orange-600 mt-0.5" />
+                        <div className="flex-1">
+                            <p className="text-sm font-medium text-orange-800">Potential Duplicates Detected</p>
+                            <p className="text-sm text-orange-700 mt-1">
+                                Some transactions in this import match existing transactions (same date and amount).
+                                They may be duplicates.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-center space-x-2 ml-7">
+                        <Checkbox
+                            id="consent"
+                            checked={userConsent}
+                            onCheckedChange={(checked) => setUserConsent(checked as boolean)}
+                        />
+                        <label
+                            htmlFor="consent"
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                        >
+                            I understand and want to import anyway
+                        </label>
+                    </div>
+                </div>
+            )}
+
             <div className="bg-gray-50 p-3 rounded text-sm">
-                <p><strong>Detected:</strong> {transactions.length} transactions</p>
+                <p><strong>Total in file:</strong> {transactions.length} transactions</p>
+                <p><strong>Will be imported:</strong> {filteredCount} transactions</p>
                 <p><strong>Date Range:</strong> {startDate} to {endDate}</p>
             </div>
 
             <div className="flex gap-2">
-                <Button onClick={handleStage} disabled={uploading}>
+                <Button
+                    onClick={handleStage}
+                    disabled={uploading || (hasConflicts && !userConsent)}
+                >
                     {uploading ? 'Staging...' : 'Stage Transactions'}
                 </Button>
                 <Button variant="outline" onClick={() => setStep('UPLOAD')} disabled={uploading}>

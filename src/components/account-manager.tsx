@@ -1,13 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Account } from "@prisma/client";
+import { Account, ImportCoverage } from "@prisma/client";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { Trash2 } from "lucide-react";
+import { Trash2, Calendar } from "lucide-react";
+
+interface AccountWithCoverage extends Account {
+    importCoverages: ImportCoverage[];
+}
 
 interface AccountManagerProps {
-    initialAccounts: Account[];
+    initialAccounts: AccountWithCoverage[];
 }
 
 export function AccountManager({ initialAccounts }: AccountManagerProps) {
@@ -27,6 +31,38 @@ export function AccountManager({ initialAccounts }: AccountManagerProps) {
         // TODO: Implement server action
         console.log("Delete account:", id);
     };
+
+    // Format coverage periods grouped by bank
+    function formatCoverage(coverages: ImportCoverage[]) {
+        if (coverages.length === 0) {
+            return <span className="text-gray-400 text-xs">No imports yet</span>;
+        }
+
+        // Group by bank
+        const byBank = coverages.reduce((acc, cov) => {
+            if (!acc[cov.bankAccount]) {
+                acc[cov.bankAccount] = [];
+            }
+            acc[cov.bankAccount].push(cov);
+            return acc;
+        }, {} as Record<string, ImportCoverage[]>);
+
+        return (
+            <div className="space-y-1">
+                {Object.entries(byBank).map(([bank, periods]) => (
+                    <div key={bank} className="text-xs">
+                        <span className="font-semibold text-violet-700">{bank}:</span>{' '}
+                        {periods.map((p, idx) => (
+                            <span key={p.id}>
+                                {new Date(p.startDate).toLocaleDateString('en-GB')} - {new Date(p.endDate).toLocaleDateString('en-GB')}
+                                {idx < periods.length - 1 && ', '}
+                            </span>
+                        ))}
+                    </div>
+                ))}
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-4">
@@ -80,6 +116,12 @@ export function AccountManager({ initialAccounts }: AccountManagerProps) {
                             <th className="p-3">Name</th>
                             <th className="p-3">Type</th>
                             <th className="p-3">Currency</th>
+                            <th className="p-3">
+                                <div className="flex items-center gap-1">
+                                    <Calendar className="w-4 h-4" />
+                                    Coverage Periods
+                                </div>
+                            </th>
                             <th className="p-3">Actions</th>
                         </tr>
                     </thead>
@@ -89,6 +131,9 @@ export function AccountManager({ initialAccounts }: AccountManagerProps) {
                                 <td className="p-3">{account.name}</td>
                                 <td className="p-3">{account.type}</td>
                                 <td className="p-3">{account.currency}</td>
+                                <td className="p-3">
+                                    {formatCoverage(account.importCoverages)}
+                                </td>
                                 <td className="p-3">
                                     <button
                                         onClick={() => handleDelete(account.id)}

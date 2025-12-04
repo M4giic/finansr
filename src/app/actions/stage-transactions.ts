@@ -3,11 +3,14 @@
 import db from "@/lib/db";
 import { BankTransaction } from "@/lib/banks/types";
 import { revalidatePath } from "next/cache";
+import { updateCoverage } from "./coverage";
 
 export async function stageTransactions(
     transactions: BankTransaction[],
     accountId: string,
-    bankName: string
+    bankName: string,
+    dateRangeStart?: Date,
+    dateRangeEnd?: Date
 ) {
     try {
         let count = 0;
@@ -28,6 +31,11 @@ export async function stageTransactions(
                 }
             });
             count++;
+        }
+
+        // Update coverage if date range provided
+        if (dateRangeStart && dateRangeEnd) {
+            await updateCoverage(accountId, bankName, dateRangeStart, dateRangeEnd);
         }
 
         revalidatePath('/');
