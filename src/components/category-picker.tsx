@@ -29,6 +29,7 @@ interface CategoryPickerProps {
     onCategorySelect: (categoryId: string) => void;
     onSubcategorySelect?: (subcategoryId: string | null) => void;
     onCategoryCreated?: (category: Category) => void;
+    accountId?: string | null;
 }
 
 export function CategoryPicker({
@@ -37,7 +38,8 @@ export function CategoryPicker({
     categories,
     onCategorySelect,
     onSubcategorySelect,
-    onCategoryCreated
+    onCategoryCreated,
+    accountId
 }: CategoryPickerProps) {
     const [open, setOpen] = React.useState(false);
     const [searchValue, setSearchValue] = React.useState("");
@@ -77,7 +79,7 @@ export function CategoryPicker({
         if (!searchValue.trim()) return;
 
         setIsCreating(true);
-        const result = await createCategory(searchValue.trim());
+        const result = await createCategory(searchValue.trim(), accountId);
         setIsCreating(false);
         if (result.success && result.category) {
             setLocalCategories([...localCategories, result.category]);

@@ -99,6 +99,19 @@ export function TransactionList({ initialTransactions, categories: initialCatego
     const [categories, setCategories] = useState(initialCategories);
     const [splittingTransaction, setSplittingTransaction] = useState<Transaction | null>(null);
 
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 50;
+
+    const totalPages = Math.ceil(transactions.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const currentTransactions = transactions.slice(startIndex, endIndex);
+
+    const handlePageChange = (page: number) => {
+        setCurrentPage(page);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
     const handleCategorySelect = async (transactionId: string, categoryId: string) => {
         await updateTransactionCategory(transactionId, categoryId);
         // Clear subcategory when category changes
@@ -146,107 +159,132 @@ export function TransactionList({ initialTransactions, categories: initialCatego
 
     return (
         <>
-            <div className="border rounded-lg overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                    <thead className="bg-gray-100 dark:bg-gray-800">
-                        <tr>
-                            <th className="p-3">Date</th>
-                            <th className="p-3">Description</th>
-                            <th className="p-3 text-right">Amount</th>
-                            <th className="p-3">Category</th>
-                            <th className="p-3">I Wanted It</th>
-                            <th className="p-3">Account</th>
-                            <th className="p-3">Bank</th>
-                            <th className="p-3">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {transactions.map((tx) => {
-                            const availableCategories = categories.filter(c =>
-                                !c.accountId || c.accountId === tx.accountId
-                            );
+            <div className="border rounded-lg overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                        <thead className="bg-gray-100 dark:bg-gray-800">
+                            <tr>
+                                <th className="p-3">Date</th>
+                                <th className="p-3">Description</th>
+                                <th className="p-3 text-right">Amount</th>
+                                <th className="p-3">Category</th>
+                                <th className="p-3">I Wanted It</th>
+                                <th className="p-3">Account</th>
+                                <th className="p-3">Bank</th>
+                                <th className="p-3">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {currentTransactions.map((tx) => {
+                                const availableCategories = categories.filter(c =>
+                                    !c.accountId || c.accountId === tx.accountId
+                                );
 
-                            return (
-                                <tr key={tx.id} className="border-t hover:bg-gray-50 dark:hover:bg-gray-900">
-                                    <td className="p-3">{new Date(tx.date).toLocaleDateString()}</td>
-                                    <td className="p-3">
-                                        <EditableDescription
-                                            transactionId={tx.id}
-                                            userDescription={tx.userDescription}
-                                            originalDescription={tx.originalDescription}
-                                        />
-                                    </td>
-                                    <td className={`p-3 text-right ${tx.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                        {(tx.amount / 100).toFixed(2)} {tx.currency}
-                                    </td>
-                                    <td className="p-3">
-                                        <CategoryPicker
-                                            categoryId={tx.categoryId}
-                                            subcategoryId={tx.subcategoryId}
-                                            categories={availableCategories}
-                                            onCategorySelect={(catId) => handleCategorySelect(tx.id, catId)}
-                                            onSubcategorySelect={(subId) => handleSubcategorySelect(tx.id, subId)}
-                                            onCategoryCreated={handleCategoryCreated}
-                                        />
-                                    </td>
-                                    <td className="p-3">
-                                        <WantedSelector
-                                            transactionId={tx.id}
-                                            wantedLevel={tx.wantedLevel}
-                                        />
-                                    </td>
-                                    <td className="p-3">
-                                        <select
-                                            className="p-1 border rounded text-xs"
-                                            value={tx.accountId || ""}
-                                            onChange={(e) => handleAccountSelect(tx.id, e.target.value)}
-                                        >
-                                            <option value="" disabled>Select</option>
-                                            {accounts.map(acc => (
-                                                <option key={acc.id} value={acc.id}>{acc.name}</option>
-                                            ))}
-                                        </select>
-                                    </td>
-                                    <td className="p-3">
-                                        <select
-                                            className="p-1 border rounded text-xs"
-                                            value={tx.bankAccount}
-                                            onChange={(e) => handleBankSelect(tx.id, e.target.value)}
-                                        >
-                                            <option value="MBANK">MBANK</option>
-                                            <option value="CITI">CITI</option>
-                                            <option value="OTHER">OTHER</option>
-                                        </select>
-                                    </td>
-                                    <td className="p-3">
-                                        <button
-                                            onClick={() => setSplittingTransaction(tx)}
-                                            className="p-1 hover:bg-blue-50 rounded text-blue-600 hover:text-blue-700 mr-1"
-                                            title="Split transaction"
-                                        >
-                                            <Split className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(tx.id)}
-                                            className="p-1 hover:bg-red-50 rounded text-red-600 hover:text-red-700"
-                                            title="Delete transaction"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                return (
+                                    <tr key={tx.id} className="border-t hover:bg-gray-50 dark:hover:bg-gray-900">
+                                        <td className="p-3">{new Date(tx.date).toLocaleDateString()}</td>
+                                        <td className="p-3">
+                                            <EditableDescription
+                                                transactionId={tx.id}
+                                                userDescription={tx.userDescription}
+                                                originalDescription={tx.originalDescription}
+                                            />
+                                        </td>
+                                        <td className={`p-3 text-right ${tx.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                            {(tx.amount / 100).toFixed(2)} {tx.currency}
+                                        </td>
+                                        <td className="p-3">
+                                            <CategoryPicker
+                                                categoryId={tx.categoryId}
+                                                subcategoryId={tx.subcategoryId}
+                                                categories={availableCategories}
+                                                onCategorySelect={(catId) => handleCategorySelect(tx.id, catId)}
+                                                onSubcategorySelect={(subId) => handleSubcategorySelect(tx.id, subId)}
+                                                onCategoryCreated={handleCategoryCreated}
+                                                accountId={tx.accountId}
+                                            />
+                                        </td>
+                                        <td className="p-3">
+                                            <WantedSelector
+                                                transactionId={tx.id}
+                                                wantedLevel={tx.wantedLevel}
+                                            />
+                                        </td>
+                                        <td className="p-3">
+                                            <select
+                                                className="p-1 border rounded text-xs"
+                                                value={tx.accountId || ""}
+                                                onChange={(e) => handleAccountSelect(tx.id, e.target.value)}
+                                            >
+                                                <option value="" disabled>Select</option>
+                                                {accounts.map(acc => (
+                                                    <option key={acc.id} value={acc.id}>{acc.name}</option>
+                                                ))}
+                                            </select>
+                                        </td>
+                                        <td className="p-3">
+                                            <select
+                                                className="p-1 border rounded text-xs"
+                                                value={tx.bankAccount}
+                                                onChange={(e) => handleBankSelect(tx.id, e.target.value)}
+                                            >
+                                                <option value="MBANK">MBANK</option>
+                                                <option value="CITI">CITI</option>
+                                                <option value="OTHER">OTHER</option>
+                                            </select>
+                                        </td>
+                                        <td className="p-3">
+                                            <button
+                                                onClick={() => setSplittingTransaction(tx)}
+                                                className="p-1 hover:bg-blue-50 rounded text-blue-600 hover:text-blue-700 mr-1"
+                                                title="Split transaction"
+                                            >
+                                                <Split className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(tx.id)}
+                                                className="p-1 hover:bg-red-50 rounded text-red-600 hover:text-red-700"
+                                                title="Delete transaction"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                            {transactions.length === 0 && (
+                                <tr>
+                                    <td colSpan={8} className="p-8 text-center text-gray-500">
+                                        No transactions found. Upload a CSV to get started.
                                     </td>
                                 </tr>
-                            );
-                        })}
-                        {transactions.length === 0 && (
-                            <tr>
-                                <td colSpan={8} className="p-8 text-center text-gray-500">
-                                    No transactions found. Upload a CSV to get started.
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
+
+            {totalPages > 1 && (
+                <div className="flex justify-center items-center gap-2 mt-4">
+                    <button
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="p-2 border rounded disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-gray-800"
+                    >
+                        Previous
+                    </button>
+                    <span className="text-sm">
+                        Page {currentPage} of {totalPages}
+                    </span>
+                    <button
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className="p-2 border rounded disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-gray-800"
+                    >
+                        Next
+                    </button>
+                </div>
+            )}
 
             {splittingTransaction && (
                 <TransactionSplitDialog

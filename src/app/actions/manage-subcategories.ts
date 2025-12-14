@@ -5,13 +5,34 @@ import { revalidatePath } from "next/cache";
 
 export async function createSubcategory(name: string, categoryId: string) {
     try {
-        const subcategory = await db.subcategory.create({
-            data: {
-                name,
+        // Normalize name to Title Case
+        const normalizedName = name.trim().replace(
+            /\w\S*/g,
+            text => text.charAt(0).toUpperCase() + text.substring(1).toLowerCase()
+        );
+
+        const existing = await db.subcategory.findFirst({
+            where: {
+                name: normalizedName,
                 categoryId
             }
         });
-        revalidatePath("/");
+
+        if (existing) {
+            return { success: true, subcategory: existing };
+        }
+
+        const subcategory = await db.subcategory.create({
+            data: {
+                name: normalizedName,
+                categoryId
+            }
+        });
+        try {
+            revalidatePath("/");
+        } catch (e) {
+            // Ignore revalidation error
+        }
         return { success: true, subcategory };
     } catch (error) {
         console.error("Error creating subcategory:", error);
@@ -38,7 +59,11 @@ export async function updateSubcategory(id: string, name: string) {
             where: { id },
             data: { name }
         });
-        revalidatePath("/");
+        try {
+            revalidatePath("/");
+        } catch (e) {
+            // Ignore revalidation error
+        }
         return { success: true, subcategory };
     } catch (error) {
         console.error("Error updating subcategory:", error);
@@ -51,7 +76,11 @@ export async function deleteSubcategory(id: string) {
         await db.subcategory.delete({
             where: { id }
         });
-        revalidatePath("/");
+        try {
+            revalidatePath("/");
+        } catch (e) {
+            // Ignore revalidation error
+        }
         return { success: true };
     } catch (error) {
         console.error("Error deleting subcategory:", error);

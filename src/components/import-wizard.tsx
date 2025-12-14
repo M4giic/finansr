@@ -8,12 +8,24 @@ import { checkCoverageForRange, getConflictingTransactions } from '@/app/actions
 import { Button } from '@/components/ui/button';
 import { BankTransaction } from '@/lib/banks/types';
 import { Checkbox } from '@/components/ui/checkbox';
-import { AlertCircle, Calendar } from 'lucide-react';
+import { AlertCircle, Calendar as CalendarIcon } from 'lucide-react';
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
+
+interface ImportCoverage {
+    id: string;
+    bankAccount: string;
+    startDate: Date;
+    endDate: Date;
+}
 
 interface Account {
     id: string;
     name: string;
     type: string;
+    importCoverages?: ImportCoverage[];
 }
 
 interface ImportWizardProps {
@@ -269,26 +281,127 @@ export function ImportWizard({ accounts }: ImportWizardProps) {
                     />
                 </div>
 
-                <div>
+                <div className="flex flex-col gap-1">
                     <label className="block text-sm font-medium mb-1">From Date</label>
-                    <input
-                        type="date"
-                        className="w-full p-2 border rounded"
-                        value={startDate}
-                        onChange={e => handleDateChange('start', e.target.value)}
-                    />
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button
+                                variant={"outline"}
+                                className={cn(
+                                    "w-full justify-start text-left font-normal",
+                                    !startDate && "text-muted-foreground"
+                                )}
+                            >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {startDate ? format(new Date(startDate), "PPP") : <span>Pick a date</span>}
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                                mode="single"
+                                selected={startDate ? new Date(startDate) : undefined}
+                                defaultMonth={startDate ? new Date(startDate) : undefined}
+                                onSelect={(date) => date && handleDateChange('start', format(date, 'yyyy-MM-dd'))}
+                                initialFocus
+                                modifiers={{
+                                    covered: (date) => {
+                                        if (!selectedAccount) return false;
+                                        const coverages = accounts.find(a => a.id === selectedAccount)?.importCoverages || [];
+                                        return coverages.some(c => {
+                                            const start = new Date(c.startDate);
+                                            const end = new Date(c.endDate);
+                                            // Check if date is within range (inclusive)
+                                            // Reset hours to compare dates only
+                                            const d = new Date(date);
+                                            d.setHours(0, 0, 0, 0);
+                                            start.setHours(0, 0, 0, 0);
+                                            end.setHours(0, 0, 0, 0);
+                                            return d >= start && d <= end && (!selectedBank || c.bankAccount === selectedBank);
+                                        });
+                                    }
+                                }}
+                                modifiersStyles={{
+                                    covered: { backgroundColor: '#dcfce7', color: '#166534', fontWeight: 'bold' } // green-100 bg, green-800 text
+                                }}
+                            />
+                        </PopoverContent>
+                    </Popover>
                 </div>
 
-                <div>
+                <div className="flex flex-col gap-1">
                     <label className="block text-sm font-medium mb-1">To Date</label>
-                    <input
-                        type="date"
-                        className="w-full p-2 border rounded"
-                        value={endDate}
-                        onChange={e => handleDateChange('end', e.target.value)}
-                    />
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button
+                                variant={"outline"}
+                                className={cn(
+                                    "w-full justify-start text-left font-normal",
+                                    !endDate && "text-muted-foreground"
+                                )}
+                            >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {endDate ? format(new Date(endDate), "PPP") : <span>Pick a date</span>}
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                                mode="single"
+                                selected={endDate ? new Date(endDate) : undefined}
+                                defaultMonth={endDate ? new Date(endDate) : undefined}
+                                onSelect={(date) => date && handleDateChange('end', format(date, 'yyyy-MM-dd'))}
+                                initialFocus
+                                modifiers={{
+                                    covered: (date) => {
+                                        if (!selectedAccount) return false;
+                                        const coverages = accounts.find(a => a.id === selectedAccount)?.importCoverages || [];
+                                        return coverages.some(c => {
+                                            const start = new Date(c.startDate);
+                                            const end = new Date(c.endDate);
+                                            const d = new Date(date);
+                                            d.setHours(0, 0, 0, 0);
+                                            start.setHours(0, 0, 0, 0);
+                                            end.setHours(0, 0, 0, 0);
+                                            return d >= start && d <= end && (!selectedBank || c.bankAccount === selectedBank);
+                                        });
+                                    }
+                                }}
+                                modifiersStyles={{
+                                    covered: { backgroundColor: '#dcfce7', color: '#166534', fontWeight: 'bold' }
+                                }}
+                            />
+                        </PopoverContent>
+                    </Popover>
                 </div>
             </div>
+
+            {/* Existing Coverage Display */}
+            {selectedAccount && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <h4 className="text-sm font-medium text-blue-800 mb-2 flex items-center gap-2">
+                        <CalendarIcon className="w-4 h-4" />
+                        Existing Coverage
+                    </h4>
+                    {accounts.find(a => a.id === selectedAccount)?.importCoverages?.length ? (
+                        <div className="space-y-1">
+                            {accounts.find(a => a.id === selectedAccount)?.importCoverages
+                                ?.filter(c => !selectedBank || c.bankAccount === selectedBank) // Filter by bank if selected
+                                .map(coverage => (
+                                    <div key={coverage.id} className="text-xs text-blue-700 flex justify-between">
+                                        <span>
+                                            {new Date(coverage.startDate).toLocaleDateString()} - {new Date(coverage.endDate).toLocaleDateString()}
+                                        </span>
+                                        <span className="font-medium opacity-75">{coverage.bankAccount}</span>
+                                    </div>
+                                ))}
+                            {(!selectedBank && accounts.find(a => a.id === selectedAccount)?.importCoverages?.length === 0) && (
+                                <p className="text-xs text-blue-600 italic">No coverage recorded yet.</p>
+                            )}
+                        </div>
+                    ) : (
+                        <p className="text-xs text-blue-600 italic">No coverage recorded yet.</p>
+                    )}
+                </div>
+            )}
 
             {/* Auto-adjust checkbox */}
             <div className="flex items-center space-x-2">
@@ -308,7 +421,7 @@ export function ImportWizard({ accounts }: ImportWizardProps) {
             {/* Coverage warning */}
             {coverageWarning && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-start gap-2">
-                    <Calendar className="w-5 h-5 text-yellow-600 mt-0.5" />
+                    <CalendarIcon className="w-5 h-5 text-yellow-600 mt-0.5" />
                     <p className="text-sm text-yellow-800">{coverageWarning}</p>
                 </div>
             )}

@@ -6,6 +6,8 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Trash2, Pencil, Check, X, Plus } from "lucide-react";
 import { createSubcategory, updateSubcategory, deleteSubcategory } from "@/app/actions/manage-subcategories";
+import { createCategory } from "@/app/actions/categories";
+import { deleteCategory } from "@/app/actions/delete-category";
 
 type CategoryWithAccount = Category & {
     account?: Account | null;
@@ -22,6 +24,8 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
     const [editName, setEditName] = useState("");
     const [addingSubTo, setAddingSubTo] = useState<string | null>(null);
     const [newSubName, setNewSubName] = useState("");
+    const [addingCategoryTo, setAddingCategoryTo] = useState<string | null>(null); // accountId or "Global"
+    const [newCategoryName, setNewCategoryName] = useState("");
 
     const handleEdit = (category: Category) => {
         setEditingId(category.id);
@@ -29,15 +33,39 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
     };
 
     const handleSave = async (id: string) => {
-        // TODO: Implement server action
+        // TODO: Implement server action for updating category name
         console.log("Update category:", id, editName);
         setEditingId(null);
     };
 
     const handleDelete = async (id: string) => {
         if (!confirm("Are you sure you want to delete this category?")) return;
-        // TODO: Implement server action
-        console.log("Delete category:", id);
+
+        const result = await deleteCategory(id);
+        if (result.success) {
+            setCategories(categories.filter(c => c.id !== id));
+        } else {
+            alert("Failed to delete category");
+        }
+    };
+
+    const handleAddCategory = async (accountId: string | null) => {
+        if (!newCategoryName.trim()) return;
+
+        const result = await createCategory(newCategoryName.trim(), accountId);
+        if (result.success && result.category) {
+            // Add to local state
+            const newCat: CategoryWithAccount = {
+                ...result.category,
+                account: accountId ? initialCategories.find(c => c.accountId === accountId)?.account : null,
+                subcategories: []
+            };
+            setCategories([...categories, newCat]);
+            setAddingCategoryTo(null);
+            setNewCategoryName("");
+        } else {
+            alert("Failed to create category");
+        }
     };
 
     const handleAddSubcategory = async (categoryId: string) => {
@@ -99,13 +127,57 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
         return acc;
     }, {} as Record<string, CategoryWithAccount[]>);
 
+    // Ensure Global is always present
+    if (!grouped["Global"]) {
+        grouped["Global"] = [];
+    }
+
     return (
         <div className="space-y-4">
             <h3 className="text-lg font-semibold">Categories</h3>
 
             {Object.entries(grouped).map(([accountName, cats]) => (
                 <div key={accountName} className="space-y-2">
-                    <h4 className="font-medium text-sm text-gray-600">{accountName}</h4>
+                    <div className="flex justify-between items-center">
+                        <h4 className="font-medium text-sm text-gray-600">{accountName}</h4>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => setAddingCategoryTo(accountName)}
+                        >
+                            <Plus className="w-3 h-3 mr-1" /> Add Category
+                        </Button>
+                    </div>
+
+                    {addingCategoryTo === accountName && (
+                        <div className="flex gap-2 items-center mb-2 p-2 bg-gray-50 rounded border">
+                            <Input
+                                value={newCategoryName}
+                                onChange={(e) => setNewCategoryName(e.target.value)}
+                                placeholder="New category name"
+                                className="h-8"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        const accountId = accountName === "Global" ? null : cats[0]?.accountId;
+                                        if (accountId !== undefined) {
+                                            handleAddCategory(accountId);
+                                        }
+                                    }
+                                    if (e.key === 'Escape') { setAddingCategoryTo(null); setNewCategoryName(""); }
+                                }}
+                            />
+                            <Button size="sm" onClick={() => {
+                                const accountId = accountName === "Global" ? null : cats[0]?.accountId;
+                                if (accountId !== undefined) {
+                                    handleAddCategory(accountId);
+                                }
+                            }}>Save</Button>
+                            <Button size="sm" variant="ghost" onClick={() => { setAddingCategoryTo(null); setNewCategoryName(""); }}>Cancel</Button>
+                        </div>
+                    )}
+
                     <div className="border rounded-lg overflow-hidden">
                         <table className="w-full text-left text-sm">
                             <thead className="bg-gray-100 dark:bg-gray-800">
@@ -146,8 +218,8 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
                                             </td>
                                             <td className="p-3">
                                                 <span className={`px-2 py-1 rounded text-xs ${category.status === "SUBMITTED"
-                                                        ? "bg-green-100 text-green-800"
-                                                        : "bg-yellow-100 text-yellow-800"
+                                                    ? "bg-green-100 text-green-800"
+                                                    : "bg-yellow-100 text-yellow-800"
                                                     }`}>
                                                     {category.status}
                                                 </span>

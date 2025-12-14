@@ -5,6 +5,8 @@ import { Account, ImportCoverage } from "@prisma/client";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Trash2, Calendar } from "lucide-react";
+import { createAccount } from "@/app/actions/create-account";
+import { deleteAccount } from "@/app/actions/delete-account";
 
 interface AccountWithCoverage extends Account {
     importCoverages: ImportCoverage[];
@@ -20,16 +22,29 @@ export function AccountManager({ initialAccounts }: AccountManagerProps) {
     const [newAccount, setNewAccount] = useState({ name: "", type: "PERSONAL", currency: "PLN" });
 
     const handleAdd = async () => {
-        // TODO: Implement server action
-        console.log("Add account:", newAccount);
-        setIsAdding(false);
-        setNewAccount({ name: "", type: "PERSONAL", currency: "PLN" });
+        const result = await createAccount(newAccount);
+        if (result.success && result.account) {
+            const accountWithCoverage: AccountWithCoverage = {
+                ...result.account,
+                importCoverages: []
+            };
+            setAccounts([...accounts, accountWithCoverage]);
+            setIsAdding(false);
+            setNewAccount({ name: "", type: "PERSONAL", currency: "PLN" });
+        } else {
+            alert("Failed to create account");
+        }
     };
 
     const handleDelete = async (id: string) => {
         if (!confirm("Are you sure you want to delete this account?")) return;
-        // TODO: Implement server action
-        console.log("Delete account:", id);
+
+        const result = await deleteAccount(id);
+        if (result.success) {
+            setAccounts(accounts.filter(a => a.id !== id));
+        } else {
+            alert("Failed to delete account");
+        }
     };
 
     // Format coverage periods grouped by bank

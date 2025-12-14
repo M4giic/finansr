@@ -80,6 +80,15 @@ export default async function HomePage() {
         // Count complete staged transactions (have category AND wantedLevel)
         const completeCount = stagedTransactions.filter(tx => tx.categoryId && tx.wantedLevel).length;
 
+        // Calculate date range for staged transactions
+        let dateRangeString = "";
+        if (stagedTransactions.length > 0) {
+            const dates = stagedTransactions.map(tx => new Date(tx.date).getTime());
+            const minDate = new Date(Math.min(...dates));
+            const maxDate = new Date(Math.max(...dates));
+            dateRangeString = ` - Covering: ${minDate.toLocaleDateString()} - ${maxDate.toLocaleDateString()}`;
+        }
+
         return (
             <main className="flex min-h-screen flex-col items-center p-8 gap-8">
                 <div className="text-center">
@@ -106,7 +115,7 @@ export default async function HomePage() {
 
                             <div className="mt-8">
                                 <h2 className="text-2xl font-bold mb-4">
-                                    Staging Area ({stagedTransactions.length} transactions)
+                                    Staging Area ({stagedTransactions.length} transactions{dateRangeString})
                                 </h2>
                                 {stagedTransactions.length > 0 ? (
                                     <>
