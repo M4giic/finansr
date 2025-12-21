@@ -91,9 +91,10 @@ interface TransactionListProps {
     initialTransactions: TransactionWithAccount[];
     categories: Category[];
     accounts: Account[];
+    existingBanks: string[];
 }
 
-export function TransactionList({ initialTransactions, categories: initialCategories, accounts }: TransactionListProps) {
+export function TransactionList({ initialTransactions, categories: initialCategories, accounts, existingBanks }: TransactionListProps) {
     const t = useTranslations('HomePage');
     const [transactions, setTransactions] = useState(initialTransactions);
     const [categories, setCategories] = useState(initialCategories);
@@ -223,15 +224,24 @@ export function TransactionList({ initialTransactions, categories: initialCatego
                                             </select>
                                         </td>
                                         <td className="p-3">
-                                            <select
-                                                className="p-1 border rounded text-xs"
-                                                value={tx.bankAccount}
-                                                onChange={(e) => handleBankSelect(tx.id, e.target.value)}
-                                            >
-                                                <option value="MBANK">MBANK</option>
-                                                <option value="CITI">CITI</option>
-                                                <option value="OTHER">OTHER</option>
-                                            </select>
+                                            {(() => {
+                                                const matchedBank = existingBanks.find(b => b.toLowerCase() === tx.bankAccount.toLowerCase());
+                                                return (
+                                                    <select
+                                                        className="p-1 border rounded text-xs"
+                                                        value={matchedBank || tx.bankAccount}
+                                                        onChange={(e) => handleBankSelect(tx.id, e.target.value)}
+                                                    >
+                                                        {/* Include the current value if it doesn't match standard options (case-insensitive) */}
+                                                        {!existingBanks.some(b => b.toLowerCase() === tx.bankAccount.toLowerCase()) && (
+                                                            <option value={tx.bankAccount}>{tx.bankAccount}</option>
+                                                        )}
+                                                        {existingBanks.map(bank => (
+                                                            <option key={bank} value={bank}>{bank}</option>
+                                                        ))}
+                                                    </select>
+                                                );
+                                            })()}
                                         </td>
                                         <td className="p-3">
                                             <button

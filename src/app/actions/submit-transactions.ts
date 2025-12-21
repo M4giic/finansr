@@ -2,6 +2,7 @@
 
 import db from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { updateCoverage } from "./coverage";
 
 export async function submitTransactions() {
     // Get all staged transactions
@@ -19,6 +20,22 @@ export async function submitTransactions() {
         };
     }
 
+    // Group transactions by account and bank to update coverage
+    const coverageGroups = new Map<string, { accountId: string, bankAccount: string, dates: number[] }>();
+
+    for (const tx of stagedTransactions) {
+        if (!tx.accountId) continue;
+        const key = `${tx.accountId}_${tx.bankAccount}`;
+        if (!coverageGroups.has(key)) {
+            coverageGroups.set(key, {
+                accountId: tx.accountId,
+                bankAccount: tx.bankAccount,
+                dates: []
+            });
+        }
+        coverageGroups.get(key)!.dates.push(tx.date.getTime());
+    }
+
     // Update all transactions to SUBMITTED
     await db.transaction.updateMany({
         where: { status: "STAGED" },
@@ -33,6 +50,13 @@ export async function submitTransactions() {
         where: { status: "STAGED" },
         data: { status: "SUBMITTED" }
     });
+
+    // Update coverage for each group
+    for (const group of coverageGroups.values()) {
+        const minDate = new Date(Math.min(...group.dates));
+        const maxDate = new Date(Math.max(...group.dates));
+        await updateCoverage(group.accountId, group.bankAccount, minDate, maxDate);
+    }
 
     revalidatePath('/');
 

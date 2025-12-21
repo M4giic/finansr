@@ -5,12 +5,14 @@ import { useRouter } from 'next/navigation';
 import { uploadCsv } from '@/app/actions/upload-csv';
 import { stageTransactions } from '@/app/actions/stage-transactions';
 import { checkCoverageForRange, getConflictingTransactions } from '@/app/actions/coverage';
+import { getExistingBanks } from '@/app/actions/get-banks';
 import { Button } from '@/components/ui/button';
 import { BankTransaction } from '@/lib/banks/types';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertCircle, Calendar as CalendarIcon } from 'lucide-react';
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { BankSelector } from '@/components/bank-selector';
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 
@@ -52,7 +54,18 @@ export function ImportWizard({ accounts }: ImportWizardProps) {
     const [conflictMap, setConflictMap] = useState<Record<string, string[]>>({});
     const [coverageWarning, setCoverageWarning] = useState('');
 
+    const [existingBanks, setExistingBanks] = useState<string[]>([]);
     const router = useRouter();
+
+    useEffect(() => {
+        const fetchBanks = async () => {
+            const result = await getExistingBanks();
+            if (result.success) {
+                setExistingBanks(result.banks);
+            }
+        };
+        fetchBanks();
+    }, []);
 
     // Check for coverage conflicts when account, bank, or date range changes
     useEffect(() => {
@@ -114,8 +127,18 @@ export function ImportWizard({ accounts }: ImportWizardProps) {
         setUploading(false);
         if (result.success && result.transactions) {
             setTransactions(result.transactions);
-            setBankName(result.bankName || '');
-            setSelectedBank(result.bankName || 'MBANK');
+            const detectedBank = result.bankName || 'MBANK';
+            setBankName(detectedBank);
+
+            // Try to match detected bank with existing banks (case-insensitive, fuzzy)
+            const lowerDetected = detectedBank.toLowerCase();
+            const matchedBank = existingBanks.find(b => {
+                const lowerExisting = b.toLowerCase();
+                return lowerExisting === lowerDetected ||
+                    lowerDetected.includes(lowerExisting) ||
+                    lowerExisting.includes(lowerDetected);
+            });
+            setSelectedBank(matchedBank || detectedBank);
 
             // Calculate date range
             const dates = result.transactions.map(t => new Date(t.date).getTime());
@@ -192,9 +215,7 @@ export function ImportWizard({ accounts }: ImportWizardProps) {
         const result = await stageTransactions(
             filtered,
             selectedAccount,
-            selectedBank,
-            start,
-            end
+            selectedBank
         );
 
         setUploading(false);
@@ -273,11 +294,11 @@ export function ImportWizard({ accounts }: ImportWizardProps) {
 
                 <div>
                     <label className="block text-sm font-medium mb-1">Bank</label>
-                    <input
-                        type="text"
-                        className="w-full p-2 border rounded"
+                    <BankSelector
+                        banks={existingBanks}
                         value={selectedBank}
-                        onChange={e => setSelectedBank(e.target.value)}
+                        onChange={setSelectedBank}
+                        placeholder="Select or enter bank..."
                     />
                 </div>
 

@@ -9,6 +9,7 @@ import { AllTransactions } from "@/components/all-transactions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import db from "@/lib/db";
 import { getCategories } from "@/app/actions/categories";
+import { getExistingBanks } from "@/app/actions/get-banks";
 import { SyncButton } from "@/components/sync-button";
 
 async function getAccounts() {
@@ -76,6 +77,7 @@ export default async function HomePage() {
         const categories = await getCategories();
         const categoriesWithAccounts = await getCategoriesWithAccounts();
         const accounts = await getAccounts();
+        const { banks: existingBanks } = await getExistingBanks();
 
         // Count complete staged transactions (have category AND wantedLevel)
         const completeCount = stagedTransactions.filter(tx => tx.categoryId && tx.wantedLevel).length;
@@ -123,6 +125,7 @@ export default async function HomePage() {
                                             initialTransactions={stagedTransactions}
                                             categories={categories}
                                             accounts={accounts}
+                                            existingBanks={existingBanks}
                                         />
                                         <div className="mt-4">
                                             <SubmitButton
