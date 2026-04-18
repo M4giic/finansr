@@ -1,36 +1,113 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Finansr
+
+A personal finance tracker for importing, categorizing, and analyzing bank transactions — with Google Sheets sync for flexible reporting.
+
+## Features
+
+- **Multi-source import** — Upload CSV exports from mBank or Citi (auto-detected), or connect live bank accounts via [Tink](https://tink.com/)
+- **Staging workflow** — Review and categorize transactions before committing them
+- **Spending analysis** — Tag each transaction with a "wanted level": `HAD_TO`, `WANTED`, `DIDNT_NEED`, or `REGRET`
+- **Google Sheets sync** — Push finalized transactions to a spreadsheet with auto-generated monthly overview tabs and QUERY-based aggregations
+- **Multi-account support** — Track personal and joint accounts across multiple currencies
+- **Duplicate prevention** — Import coverage tracking prevents re-importing the same date ranges
+- **Multi-language** — English and Polish (PL) UI
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 15, React 19, TypeScript |
+| Styling | Tailwind CSS 4, Radix UI |
+| Database | SQLite via Prisma |
+| Bank connectivity | Tink API |
+| Spreadsheet sync | Google Sheets API (service account) |
+| Testing | Vitest (unit), Playwright (E2E) |
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+
+- A Google Cloud service account with access to a Google Sheet (for sync)
+- A Tink developer account (optional, for live bank connections)
+
+### Installation
+
+```bash
+git clone https://github.com/M4giic/finansr.git
+cd finansr
+npm install
+```
+
+### Environment Variables
+
+Create a `.env.local` file in the project root:
+
+```env
+# Database
+DATABASE_URL="file:./dev.db"
+
+# Google Sheets sync
+GOOGLE_SERVICE_ACCOUNT_EMAIL=your-service-account@project.iam.gserviceaccount.com
+GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+GOOGLE_SHEET_ID=your_spreadsheet_id
+
+# Tink API (optional — for live bank connections)
+TINK_CLIENT_ID=your_tink_client_id
+TINK_CLIENT_SECRET=your_tink_client_secret
+TINK_ENV=sandbox
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
+
+### Database Setup
+
+```bash
+npx prisma generate
+npx prisma db push
+```
+
+### Run
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Usage
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **Create an account** — Configure at least one account (personal or joint) in the Admin tab.
+2. **Import transactions** — Upload a CSV from your bank or connect via Tink.
+3. **Categorize** — Assign categories, subcategories, and wanted levels to staged transactions.
+4. **Submit** — Finalize transactions to move them out of the staging area.
+5. **Sync to Sheets** — Push submitted transactions to Google Sheets for reporting.
 
-## Learn More
+## Supported CSV Formats
 
-To learn more about Next.js, take a look at the following resources:
+| Bank | Format |
+|---|---|
+| mBank | Standard export |
+| Citi | Legacy and new export formats |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Tink integration supports any bank available in the Tink network.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Project Structure
 
-## Deploy on Vercel
+```
+src/
+  app/
+    [locale]/          # i18n routes (en, pl)
+    api/tink/          # Tink OAuth flow and transaction sync
+    actions/           # Next.js server actions (mutations)
+  components/          # UI components
+  lib/
+    csv/               # Bank CSV parsers (factory pattern)
+    google-sheets.ts   # Sheets sync logic
+    tink.ts            # Tink API client
+prisma/
+  schema.prisma        # Database schema
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT
